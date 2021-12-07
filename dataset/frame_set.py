@@ -8,10 +8,10 @@ import torchvision.transforms as transforms
 
 class FrameDataset:
 
-    def __init__(self, batch_size=4, dataset_path='data_sample/frames', if_resize=True):
+    def __init__(self, batch_size=4, dataset_path='data_sample/frames'):
         self.batch_size = batch_size
         self.dataset_path = dataset_path
-        self.if_resize = if_resize
+        # self.if_resize = if_resize
         self.train_dataset = self.get_train_numpy()
         self.x_mean, self.x_std = self.compute_train_statistics()
         self.transform = self.get_transforms()
@@ -33,17 +33,12 @@ class FrameDataset:
         return x_mean, x_std
 
     def get_transforms(self):
-        if self.if_resize:
-            transform_list = [
-                transforms.Resize((28, 50)),
-                transforms.ToTensor(),
-                transforms.Normalize(self.x_mean, self.x_std)
-            ]
-        else:
-            transform_list = [
-                transforms.ToTensor(),
-                transforms.Normalize(self.x_mean, self.x_std)
-            ]
+        transform_list = [
+            transforms.CenterCrop(224),
+            # transforms.Resize((32, 32)),
+            transforms.ToTensor(),
+            transforms.Normalize(self.x_mean, self.x_std)
+        ]
         transform = transforms.Compose(transform_list)
         return transform
 
