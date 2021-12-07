@@ -18,6 +18,7 @@ class Resnet_Dilate(nn.Module):
     def __init__(self, original_net, K=16):
         super(Resnet_Dilate, self).__init__()
 
+        # Remove the stride of the last residual block
         original_net.layer4.apply(partial(self._nostride_dilate, dilate=2))
         
         # Remove the last two layers of the ResNet - average pooling & fc
@@ -32,6 +33,7 @@ class Resnet_Dilate(nn.Module):
         x = self.fc(x)
         x = F.adaptive_max_pool2d(x, 1)
         x = x.view(x.size(0), x.size(1))
+
         return x
 
 
