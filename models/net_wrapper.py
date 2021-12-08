@@ -60,13 +60,13 @@ class NetWrapper(nn.Module):
             pred_masks[n] = torch.sigmoid(pred_masks[n])
 
         # 4. loss
+#         err = self.crit(pred_masks, gt_masks, weight).reshape(1)
         if args['binary_mask']:
             criterion = nn.BCELoss(weight=weight)
             loss = criterion(pred_masks, gt_masks, weight).reshape(1)
         else: 
             criterion = nn.WL1Loss()
-            loss = criterion(pred_masks, gt_masks, weight).reshape(1)
-#         loss = self.crit(pred_masks, gt_masks, weight).reshape(1)
+            loss = criterion(pred_masks, gt_masks).reshape(1)
 
         return loss, \
             {'pred_masks': pred_masks, 'gt_masks': gt_masks,
