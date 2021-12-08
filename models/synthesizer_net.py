@@ -8,12 +8,12 @@ class SynthesizerNet(nn.Module):
         self.scale = nn.Parameter(torch.ones(fc_dim))
         self.bias = nn.Parameter(torch.zeros(1))
 
-    def forward(self, img_features, sound_features):
+    def forward(self, image_features, sound_features):
         # Inputs:
-        # img_features: (batch_size, num_img_channels)
+        # image_features: (batch_size, num_img_channels)
         # sound_features: (batch_size, num_audio_channels, HS, WS)
         
-        # K = num_img_channels = num_audio_channels = fc_dim
+        # Note that: num_img_channels = num_audio_channels = K (in paper) = fc_dim (in code)
         
         B, C, HS, WS = sound_features.size
         img_features = img_features.view(B, 1, C)
@@ -23,4 +23,4 @@ class SynthesizerNet(nn.Module):
         z = z.view(B, 1, HS, WS)
         z = z + self.bias
         
-        return pred_mask
+        return z
