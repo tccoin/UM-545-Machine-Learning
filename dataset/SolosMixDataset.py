@@ -85,10 +85,10 @@ class SolosMixDataset():
         audio_raw *= (2.0**-31)
 
         # convert to mono
-        if audio_raw.shape[1] == 2:
-            audio_raw = (audio_raw[:, 0] + audio_raw[:, 1]) / 2
+        if audio_raw.shape[0] == 2:
+            audio_raw = (audio_raw[0,:] + audio_raw[1,:]) / 2
         else:
-            audio_raw = audio_raw[:, 0]
+            audio_raw = audio_raw[0,:]
 
         return audio_raw, rate
 
@@ -102,6 +102,7 @@ class SolosMixDataset():
         # load audio
         audio_raw, rate = self._load_audio_file(path)
 
+        print('raw_audio length: {}'.format(len(audio_raw)))
         # repeat if audio is too short
         audio_sec = 1. * self.args['audio_length'] / self.args['audio_rate']
         if audio_raw.shape[0] < rate * audio_sec:
@@ -114,8 +115,10 @@ class SolosMixDataset():
             if nearest_resample:
                 audio_raw = audio_raw[::rate//self.args['audio_rate']]
             else:
+                print('raw_audio length: {}'.format(len(audio_raw)))
                 audio_raw = librosa.resample(
                     audio_raw, rate, self.args['audio_rate'])
+                print('new_audio length: {}'.format(len(audio_raw)))
 
         # crop N seconds
         len_raw = audio_raw.shape[0]
@@ -272,7 +275,7 @@ if __name__ == '__main__':
         dataset,
         batch_size=args['batch_size'],
         shuffle=True,
-        # num_workers=int(args['workers']),
+        num_workers=int(args['workers']),
         drop_last=True)
     for i, batch_data in enumerate(loader):
         print(i)
