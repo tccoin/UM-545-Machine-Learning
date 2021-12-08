@@ -10,11 +10,11 @@ from PIL import Image
 import librosa
 
 class SolosMixDataset():
-    def __init__(self, args):
+    def __init__(self, args, split):
 
         self.args = args
-        self.mode = args['mode']
-        mode_ = args['mode']+'_'
+        self.split = split
+        split_ = split+'_'
 
         # init transform
         self._init_transform()
@@ -24,12 +24,12 @@ class SolosMixDataset():
             random.seed(args['seed'])
 
         # load samples
-        sample_list_path = args[mode_+'sample_list_path']
+        sample_list_path = args[split_+'sample_list_path']
         self.sample_list = self._load_sample_list(sample_list_path)
-        self.sample_list *= args[mode_+'samples_num'] // len(self.sample_list) + 1
+        self.sample_list *= args[split_+'samples_num'] // len(self.sample_list) + 1
         random.shuffle(self.sample_list)
 
-        self.sample_list = self.sample_list[0: args[mode_+'samples_num']]
+        self.sample_list = self.sample_list[0: args[split_+'samples_num']]
         samples_num = len(self.sample_list)
         assert samples_num > 0
         print('number of samples: {}'.format(samples_num))
@@ -47,7 +47,7 @@ class SolosMixDataset():
 
     def _init_transform(self):
         x_mean, x_std = [0.485, 0.456, 0.406], [0.229, 0.224, 0.225]
-        if self.mode == 'train':
+        if self.split == 'train':
             transform_list = [
                 transforms.Resize(int(self.args['frame_size']*1.2)),
                 transforms.RandomCrop(self.args['frame_size']),
@@ -85,10 +85,10 @@ class SolosMixDataset():
         audio_raw *= (2.0**-31)
 
         # convert to mono
-        if audio_raw.shape[1] == 2:
-            audio_raw = (audio_raw[:, 0] + audio_raw[:, 1]) / 2
+        if audio_raw.shape[0] == 2:
+            audio_raw = (audio_raw[0,:] + audio_raw[1,:]) / 2
         else:
-            audio_raw = audio_raw[:, 0]
+            audio_raw = audio_raw[0,:]
 
         return audio_raw, rate
 
@@ -102,6 +102,7 @@ class SolosMixDataset():
         # load audio
         audio_raw, rate = self._load_audio_file(path)
 
+        # print('raw_audio length: {}/{}/{}'.format(len(audio_raw), center_timestamp*2,len(audio_raw)/center_timestamp/2))
         # repeat if audio is too short
         audio_sec = 1. * self.args['audio_length'] / self.args['audio_rate']
         if audio_raw.shape[0] < rate * audio_sec:
@@ -110,7 +111,6 @@ class SolosMixDataset():
 
         # resample
         if rate > self.args['audio_rate']:
-            print('resmaple {}->{}'.format(rate, self.args['audio_rate']))
             if nearest_resample:
                 audio_raw = audio_raw[::rate//self.args['audio_rate']]
             else:
@@ -267,12 +267,12 @@ if __name__ == '__main__':
         'stft_frame': 1022,
         'stft_hop': 256
     }
-    dataset = SolosMixDataset(args)
+    dataset_train = SolosMixDataset(args, 'train')
     loader = torch.utils.data.DataLoader(
-        dataset,
+        dataset_train,
         batch_size=args['batch_size'],
         shuffle=True,
-        # num_workers=int(args['workers']),
+        num_workers=int(args['workers']),
         drop_last=True)
     for i, batch_data in enumerate(loader):
         print(i)

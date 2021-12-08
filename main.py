@@ -6,6 +6,7 @@ from models.audio_net import Unet
 from models.vision_net import ResnetDilated
 from models.synthesizer_net import InnerProd
 from models.net_wrapper import NetWrapper
+from dataset.SolosMixDataset import SolosMixDataset
 
 def build_nets():
     return (
@@ -84,11 +85,43 @@ def checkpoint(ckpt, best_err, nets, history, epoch, args):
 
 if __name__ == '__main__':
     args = {
+        # general
+        'mode': 'train',
+        'seed': None,
         'mix_num': 2,
+        'split': 'train',
+        'batch_size': 80,
+        'workers': 12,
         'train_print_interval': 20,
-        
+        # dataset
+        'train_sample_list_path': 'data/train.csv',
+        'train_samples_num': 256,
+        'val_sample_list_path': 'data/val.csv',
+        'val_samples_num': 40,
+        # frames
+        'frame_size': 224,
+        'frames_per_video': 3,
+        'frames_stride': 24,
+        'frame_rate': 8,
+        # audio
+        'audio_rate': 11025,
+        'audio_length': 65535,
+        'use_binary_mask': True,
+        # STFT
+        'log_freq': 1,
+        'stft_frame': 1022,
+        'stft_hop': 256
     }
 
 
     nets = build_nets()
     model = NetWrapper(nets)
+    dataset = SolosMixDataset(args)
+    loader = torch.utils.data.DataLoader(
+        dataset,
+        batch_size=args['batch_size'],
+        shuffle=True,
+        num_workers=int(args['workers']),
+        drop_last=True)
+    for i, batch_data in enumerate(loader):
+        print(i)
