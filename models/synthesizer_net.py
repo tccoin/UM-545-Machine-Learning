@@ -10,10 +10,13 @@ class SynthesizerNet(nn.Module):
 
     def forward(self, image_features, sound_features):
         # Inputs:
-        # image_features: (batch_size, num_img_channels)
-        # sound_features: (batch_size, num_audio_channels, HS, WS)
+        # image_features: (batch_size, num_channels)
+        # sound_features: (batch_size, num_channels, HS, WS)
         
-        # Note that: num_img_channels = num_audio_channels = K (in paper) = fc_dim (in code)
+        # Output: 
+        # z: (batch_size, HS, WS), where (HS,WS) represent height and width of each T-F representation
+        
+        # Note that: num_channels = K (in paper) = fc_dim (in code)
         
         B, C, HS, WS = sound_features.size
         image_features = image_features.view(B, 1, C)
