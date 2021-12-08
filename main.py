@@ -50,21 +50,45 @@ def train(model, loader, optimizer, args):
 
         # print status
         if i % args['train_print_interval'] == 0:
-            print('Epoch: [{}][{}/{}]'format(0,i,0))
+            print('Epoch: [{}][{}/{}]', format(0,i,0))
 
 def calc_metrics():
     pass
 
-def checkpoint():
-    pass
 
-def calc_metrics():
-    pass
+def checkpoint(ckpt, best_err, nets, history, epoch, args):
+    print('Saving checkpoints at {} epochs.'.format(epoch))
+    (net_sound, net_frame, net_synthesizer) = nets
+    suffix_latest = 'latest.pth'
+    suffix_best = 'best.pth'
+
+    torch.save(history,
+               '{}/history_{}'.format(ckpt, suffix_latest))
+    torch.save(net_sound.state_dict(),
+               '{}/sound_{}'.format(ckpt, suffix_latest))
+    torch.save(net_frame.state_dict(),
+               '{}/frame_{}'.format(ckpt, suffix_latest))
+    torch.save(net_synthesizer.state_dict(),
+               '{}/synthesizer_{}'.format(ckpt, suffix_latest))
+
+    cur_err = history['val']['err'][-1]
+    if cur_err < best_err:
+        best_err = cur_err
+        torch.save(net_sound.state_dict(),
+                   '{}/sound_{}'.format(ckpt, suffix_best))
+        torch.save(net_frame.state_dict(),
+                   '{}/frame_{}'.format(ckpt, suffix_best))
+        torch.save(net_synthesizer.state_dict(),
+                   '{}/synthesizer_{}'.format(ckpt, suffix_best))
+
 
 if __name__ == '__main__':
     args = {
         'mix_num': 2,
-        'train_print_interval': 20
+        'train_print_interval': 20,
+        
     }
+
+
     nets = build_nets()
     model = NetWrapper(nets)
