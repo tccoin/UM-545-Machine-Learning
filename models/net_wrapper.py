@@ -12,7 +12,7 @@ class NetWrapper(nn.Module):
         mag_mix = batch_data['mag_mix']
         mags = batch_data['mags']
         frames = batch_data['frames']
-        mag_mix = mag_mix + 1e-10[0:L] 
+        mag_mix = mag_mix + 1e-10 
 
         N = self.args.num_mix
         B = mag_mix.size(0)
@@ -60,8 +60,14 @@ class NetWrapper(nn.Module):
             pred_masks[n] = torch.sigmoid(pred_masks[n])
 
         # 4. loss
-        err = self.crit(pred_masks, gt_masks, weight).reshape(1)
+        if args['binary_mask']:
+            criterion = nn.BCELoss(weight=weight)
+            loss = criterion(pred_masks, gt_masks, weight).reshape(1)
+        else: 
+            criterion = nn.WL1Loss()
+            loss = criterion(pred_masks, gt_masks, weight).reshape(1)
+#         loss = self.crit(pred_masks, gt_masks, weight).reshape(1)
 
-        return err, \
+        return loss, \
             {'pred_masks': pred_masks, 'gt_masks': gt_masks,
              'mag_mix': mag_mix, 'mags': mags, 'weight': weight}
