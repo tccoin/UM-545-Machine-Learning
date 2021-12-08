@@ -16,10 +16,10 @@ class SynthesizerNet(nn.Module):
         # Note that: num_img_channels = num_audio_channels = K (in paper) = fc_dim (in code)
         
         B, C, HS, WS = sound_features.size
-        img_features = img_features.view(B, 1, C)
+        image_features = image_features.view(B, 1, C)
         
         # forward pass
-        z = torch.bmm(img_features * self.scale, sound_features.view(B, C, -1))
+        z = torch.bmm(image_features * self.scale, sound_features.view(B, C, -1))
         z = z.view(B, 1, HS, WS)
         z = z + self.bias
         
