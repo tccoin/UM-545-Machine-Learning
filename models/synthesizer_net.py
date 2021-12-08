@@ -19,7 +19,7 @@ class SynthesizerNet(nn.Module):
         # sound_features: (batch_size, num_channels, HS, WS)
         
         # Output: 
-        # out: (HS, WS) represent (height, width) for each T-F representation
+        # out: (HS, WS) represents the size of each T-F representation of sound
         
         # Note that: num_channels = K (in paper) = fc_dim (in code)
         
