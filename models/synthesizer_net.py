@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class SynthesizerNet(nn.Module):
-    def __init__(self, fc_dim, activation):
+    def __init__(self, fc_dim):
         # Inputs:
         # fc_dim = K (in paper)
         # activation: choose one from {torch.sigmoid, F.relu, F.tanh}
@@ -31,6 +31,4 @@ class SynthesizerNet(nn.Module):
         z = z.view(B, 1, HS, WS)
         z = z + self.bias
         
-        out = self.activate(z)
-        
-        return out
+        return z
