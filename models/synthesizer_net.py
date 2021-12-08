@@ -6,7 +6,7 @@ class SynthesizerNet(nn.Module):
     def __init__(self, fc_dim, activation):
         # Inputs:
         # fc_dim = K (in paper)
-        # activation: choose from {torch.sigmoid, F.relu, F.tanh}
+        # activation: torch.sigmoid, F.relu or F.tanh
         
         super(SynthesizerNet, self).__init__()
         self.scale = nn.Parameter(torch.ones(fc_dim))
