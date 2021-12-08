@@ -3,10 +3,15 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class SynthesizerNet(nn.Module):
-    def __init__(self, fc_dim):
+    def __init__(self, fc_dim, activation):
+        # Inputs:
+        # fc_dim = K (in paper)
+        # activation: choose from {torch.sigmoid, F.relu, F.tanh}
+        
         super(SynthesizerNet, self).__init__()
         self.scale = nn.Parameter(torch.ones(fc_dim))
         self.bias = nn.Parameter(torch.zeros(1))
+        self.activate = activation
 
     def forward(self, image_features, sound_features):
         # Inputs:
@@ -14,7 +19,7 @@ class SynthesizerNet(nn.Module):
         # sound_features: (batch_size, num_channels, HS, WS)
         
         # Output: 
-        # z: (batch_size, HS, WS), where (HS,WS) represent height and width of each T-F representation
+        # out: (HS, WS) represent (height, width) for each T-F representation
         
         # Note that: num_channels = K (in paper) = fc_dim (in code)
         
@@ -26,4 +31,6 @@ class SynthesizerNet(nn.Module):
         z = z.view(B, 1, HS, WS)
         z = z + self.bias
         
-        return z
+        out = self.activate(z)
+        
+        return out
