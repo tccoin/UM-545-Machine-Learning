@@ -5,18 +5,12 @@ import torchvision
 from functools import partial
 
 
-def load_resnet():
-
-    original_resnet = torchvision.models.resnet18(pretrained=True)
-    dilated_resnet = Resnet_Dilate(original_resnet)
-
-    return dilated_resnet
-
-
 class Resnet_Dilate(nn.Module):
 
-    def __init__(self, original_net, K=16):
+    def __init__(self, K=16):
         super(Resnet_Dilate, self).__init__()
+
+        original_net = torchvision.models.resnet18(pretrained=True)
 
         # Remove the stride of the last residual block
         original_net.layer4.apply(partial(self._nostride_dilate, dilate=2))
