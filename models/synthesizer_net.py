@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class SynthesizerNet(nn.Module):
-    def __init__(self, fc_dim):
+    def __init__(self, fc_dim=32):
         # Inputs:
         # fc_dim = K (in paper)
         # activation: choose one from {torch.sigmoid, F.relu, F.tanh}

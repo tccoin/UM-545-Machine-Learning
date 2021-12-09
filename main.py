@@ -3,17 +3,25 @@ import torchvision
 import torch.nn.functional as F
 
 from models.audio_net import Unet
-from models.vision_net import ResnetDilated
-from models.synthesizer_net import InnerProd
+from models.vision_net import ResnetDilate
+from models.synthesizer_net import SynthesizerNet
 from models.net_wrapper import NetWrapper
 from dataset.SolosMixDataset import SolosMixDataset
 
 def build_nets():
     return (
         Unet(),
-        ResnetDilated(),
-        InnerProd()
+        ResnetDilate(),
+        SynthesizerNet()
     )
+
+def build_optimizer(nets):
+    (net_sound, net_frame, net_synthesizer) = nets
+    param_groups = [{'params': net_sound.parameters(), 'lr': 1e-3},
+                    {'params': net_synthesizer.parameters(), 'lr': 1e-3},
+                    {'params': net_frame.features.parameters(), 'lr': 1e-4},
+                    {'params': net_frame.fc.parameters(), 'lr': 1e-3}]
+    return torch.optim.SGD(param_groups, momentum=0.9, weight_decay=1e-4)
 
 def weights_init(layer):
     classname = layer.__class__.__name__
@@ -28,10 +36,11 @@ def weights_init(layer):
 def evaluate(model, loader, args):
     torch.set_grad_enabled(False)
     model.eval()
+    error_history = []
     for i, batch_data in enumerate(loader):
         error, outputs = model.forward(batch_data, args)
-        error_mean = error.mean()
-    print('[Eval Summary] Epoch: {}, Loss: {:.4f}')
+        error_history.append(error.mean())
+    return torch.mean(error_history)
         
 
 def train(model, loader, optimizer, args):
@@ -57,30 +66,29 @@ def calc_metrics():
     pass
 
 
-def checkpoint(ckpt, best_err, nets, history, epoch, args):
-    print('Saving checkpoints at {} epochs.'.format(epoch))
+def checkpoint(nets, history, args):
     (net_sound, net_frame, net_synthesizer) = nets
     suffix_latest = 'latest.pth'
     suffix_best = 'best.pth'
+    path = args['ckeckpoint_path']
 
     torch.save(history,
-               '{}/history_{}'.format(ckpt, suffix_latest))
+               '{}/history_{}'.format(path, suffix_latest))
     torch.save(net_sound.state_dict(),
-               '{}/sound_{}'.format(ckpt, suffix_latest))
+               '{}/sound_{}'.format(path, suffix_latest))
     torch.save(net_frame.state_dict(),
-               '{}/frame_{}'.format(ckpt, suffix_latest))
+               '{}/frame_{}'.format(path, suffix_latest))
     torch.save(net_synthesizer.state_dict(),
-               '{}/synthesizer_{}'.format(ckpt, suffix_latest))
+               '{}/synthesizer_{}'.format(path, suffix_latest))
 
-    cur_err = history['val']['err'][-1]
-    if cur_err < best_err:
-        best_err = cur_err
+    if min(history)==history[-1]:
         torch.save(net_sound.state_dict(),
-                   '{}/sound_{}'.format(ckpt, suffix_best))
+                   '{}/sound_{}'.format(path, suffix_best))
         torch.save(net_frame.state_dict(),
-                   '{}/frame_{}'.format(ckpt, suffix_best))
+                   '{}/frame_{}'.format(path, suffix_best))
         torch.save(net_synthesizer.state_dict(),
-                   '{}/synthesizer_{}'.format(ckpt, suffix_best))
+                   '{}/synthesizer_{}'.format(path, suffix_best))
+    
 
 
 if __name__ == '__main__':
@@ -92,7 +100,10 @@ if __name__ == '__main__':
         'split': 'train',
         'batch_size': 80,
         'workers': 12,
-        'train_print_interval': 20,
+        'print_interval_batch': 20,
+        'evaluate_interval_epoch': 1,
+        'num_epoch': 100,
+        'ckeckpoint_path': 'ckpt/',
         # dataset
         'train_sample_list_path': 'data/train.csv',
         'train_samples_num': 256,
@@ -114,14 +125,43 @@ if __name__ == '__main__':
     }
 
 
+    # nets
     nets = build_nets()
     model = NetWrapper(nets)
-    dataset = SolosMixDataset(args)
-    loader = torch.utils.data.DataLoader(
-        dataset,
+
+    # dataset and loader
+    dataset_train = SolosMixDataset(args, 'train')
+    dataset_validation = SolosMixDataset(args, 'validation')
+    loader_train = torch.utils.data.DataLoader(
+        dataset_train,
         batch_size=args['batch_size'],
         shuffle=True,
         num_workers=int(args['workers']),
         drop_last=True)
-    for i, batch_data in enumerate(loader):
-        print(i)
+    loader_validation = torch.utils.data.DataLoader(
+        dataset_validation,
+        batch_size=args['batch_size'],
+        shuffle=False,
+        num_workers=int(args['workers']),
+        drop_last=False)
+
+    # optimizer
+    optimizer = build_optimizer(nets)
+
+    if args['mode'] == 'evaluate':
+        # evaluate mode
+        loss = evaluate(model, loader_validation, args)
+        print('[Eval] Epoch 0, Loss: {:.4f}'.format(loss))
+    elif args['mode'] == 'train':
+        # train mode
+        epoch_iters = len(dataset_train)
+        print('1 Epoch = {} iters'.format(epoch_iters))
+        loss_history = []
+        for epoch in range(args['num_epoch']):
+            print('Epoch {}'.format(epoch+1))
+            train(model, loader_train, optimizer, args)
+            if epoch % args['evaluate_interval_epoch'] == 0:
+                loss = evaluate(model, loader_validation, args)
+                loss_history.append(loss)
+                print('[Eval] Epoch {}, Loss: {:.4f}'.format(epoch, loss))
+                checkpoint(nets, loss_history, args)
