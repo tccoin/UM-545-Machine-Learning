@@ -5,7 +5,7 @@ import random
 import fnmatch
 
 
-def find_recursive(root_dir, ext='.mp3'):
+def find_recursive(root_dir, ext='.wav'):
     files = []
     for root, dirnames, filenames in os.walk(root_dir):
         for filename in fnmatch.filter(filenames, '*' + ext):
@@ -29,10 +29,10 @@ if __name__ == '__main__':
 
     # find all audio/frames pairs
     infos = []
-    audio_files = find_recursive(args.root_audio, ext='.mp3')
+    audio_files = find_recursive(args.root_audio, ext='.wav')
     for audio_path in audio_files:
         frame_path = audio_path.replace(args.root_audio, args.root_frame) \
-                               .replace('.mp3', '.mp4')
+                               .replace('.wav', '.mp4')
         frame_files = glob.glob(frame_path + '/*.jpg')
         if len(frame_files) > args.fps * 20:
             infos.append(','.join([audio_path, frame_path, str(len(frame_files))]))

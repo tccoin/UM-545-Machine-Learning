@@ -5,9 +5,10 @@ import numpy as np
 import torch
 import torch.utils.data as torchdata
 from torchvision import transforms
-import torchaudio
 from PIL import Image
 import librosa
+import warnings
+warnings.filterwarnings('ignore')
 
 class SolosMixDataset():
     def __init__(self, args, split):
@@ -77,19 +78,7 @@ class SolosMixDataset():
         return torch.from_numpy(amp), torch.from_numpy(phase)
 
     def _load_audio_file(self, path):
-        assert path.endswith('.mp3')
-        audio_raw, rate = torchaudio.load(path)
-        audio_raw = audio_raw.numpy().astype(np.float32)
-
-        # range to [-1, 1]
-        audio_raw *= (2.0**-31)
-
-        # convert to mono
-        if audio_raw.shape[0] == 2:
-            audio_raw = (audio_raw[0,:] + audio_raw[1,:]) / 2
-        else:
-            audio_raw = audio_raw[0,:]
-
+        audio_raw, rate = librosa.load(path, sr=None, mono=True)
         return audio_raw, rate
 
     def _load_audio(self, path, center_timestamp, nearest_resample=False):
@@ -246,13 +235,13 @@ if __name__ == '__main__':
         'seed': None,
         'mix_num': 2,
         'split': 'train',
-        'batch_size': 80,
+        'batch_size': 10,
         'workers': 12,
         # dataset
         'train_sample_list_path': 'data/train.csv',
         'train_samples_num': 256,
-        'val_sample_list_path': 'data/val.csv',
-        'val_samples_num': 40,
+        'validation_sample_list_path': 'data/val.csv',
+        'validation_samples_num': 40,
         # frames
         'frame_size': 224,
         'frames_per_video': 3,
@@ -268,11 +257,13 @@ if __name__ == '__main__':
         'stft_hop': 256
     }
     dataset_train = SolosMixDataset(args, 'train')
+    batch_data = dataset_train[0]
     loader = torch.utils.data.DataLoader(
         dataset_train,
         batch_size=args['batch_size'],
         shuffle=True,
-        num_workers=int(args['workers']),
+        # num_workers=int(args['workers']),
         drop_last=True)
     for i, batch_data in enumerate(loader):
         print(i)
+        break

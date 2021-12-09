@@ -21,7 +21,7 @@ class VideoSpliter(object):
                 os.makedirs(instrument_audio_dir)
             for i, video_id in enumerate(dataset[instrument]):
                 video_path = os.path.join(dataset_dir, instrument, video_id)+'.mp4'
-                audio_path = os.path.join(audio_dir, instrument, video_id+'.mp3')
+                audio_path = os.path.join(audio_dir, instrument, video_id+'.wav')
                 frames_dir_path = os.path.join(frames_dir, instrument, video_id+'.mp4')
                 frame_existed = os.path.exists(frames_dir_path+'/0.jpg')
                 audio_existed = os.path.exists(audio_path)
@@ -46,7 +46,7 @@ class VideoSpliter(object):
                         (
                             ffmpeg
                             .input(video_path)
-                            .output(audio_path, format='mp3', ac=1, audio_bitrate ='11025')
+                            .output(audio_path, format='wav', ac=1, ar=11025)
                             .overwrite_output()
                             .run(quiet=False)
                         )
