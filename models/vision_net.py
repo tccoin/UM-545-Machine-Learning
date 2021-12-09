@@ -8,7 +8,7 @@ from functools import partial
 class ResnetDilate(nn.Module):
 
     def __init__(self, K=16):
-        super(Resnet_Dilate, self).__init__()
+        super(ResnetDilate, self).__init__()
 
         original_net = torchvision.models.resnet18(pretrained=True)
 

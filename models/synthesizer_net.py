@@ -11,7 +11,6 @@ class SynthesizerNet(nn.Module):
         super(SynthesizerNet, self).__init__()
         self.scale = nn.Parameter(torch.ones(fc_dim))
         self.bias = nn.Parameter(torch.zeros(1))
-        self.activate = activation
 
     def forward(self, image_features, sound_features):
         # Inputs:

@@ -32,7 +32,7 @@ class Unet(nn.Module):
         unet = UnetBlock(
             K, nerve_grow_factor, input_nc=1,
             subblock=unet, outermost=True)
-        self.batchNorm = nn.num_features(1)
+        self.batchNorm = nn.BatchNorm2d(1)
         self.unet = unet
 
     def forward(self, x): 

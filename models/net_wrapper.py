@@ -1,11 +1,29 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import numpy as np
+
+def warpgrid(bs, HO, WO, warp=True):
+    # meshgrid
+    x = np.linspace(-1, 1, WO)
+    y = np.linspace(-1, 1, HO)
+    xv, yv = np.meshgrid(x, y)
+    grid = np.zeros((bs, HO, WO, 2))
+    grid_x = xv
+    if warp:
+        grid_y = (np.power(21, (yv+1)/2) - 11) / 10
+    else:
+        grid_y = np.log(yv * 10 + 11) / np.log(21) * 2 - 1
+    grid[:, :, :, 0] = grid_x
+    grid[:, :, :, 1] = grid_y
+    grid = grid.astype(np.float32)
+    return grid
 
 class NetWrapper(nn.Module):
     def __init__(self, nets, args):
         super(NetWrapper, self).__init__()
         self.args = args
+        self.net_sound, self.net_frame, self.net_synthesizer = nets
 
     def forward(self, batch_data, args):
 
@@ -14,17 +32,17 @@ class NetWrapper(nn.Module):
         frames = batch_data['frames']
         mag_mix = mag_mix + 1e-10 
 
-        N = self.args.num_mix
+        N = self.args['mix_num']
         B = mag_mix.size(0)
         T = mag_mix.size(3)
 
         # todo: what's this?
         # 0.0 warp the spectrogram
-        # grid_warp = torch.from_numpy(
-        #     warpgrid(B, 256, T, warp=True)).to(args.device)
-        # mag_mix = F.grid_sample(mag_mix, grid_warp)
-        # for n in range(N):
-        #     mags[n] = F.grid_sample(mags[n], grid_warp)
+        grid_warp = torch.from_numpy(
+            warpgrid(B, 256, T, warp=True)).to(args['device'])
+        mag_mix = F.grid_sample(mag_mix, grid_warp)
+        for n in range(N):
+            mags[n] = F.grid_sample(mags[n], grid_warp)
         
 
         # 0.1 calculate loss weighting coefficient: magnitude of input mixture
@@ -35,7 +53,7 @@ class NetWrapper(nn.Module):
         # 0.2 ground truth masks are computed after warpping!
         gt_masks = [None for n in range(N)]
         for n in range(N):
-            if args['binary_mask']:
+            if args['use_binary_mask']:
                 gt_masks[n] = (mags[n] > 0.5 * mag_mix).float()
             else:
                 gt_masks[n] = mags[n] / mag_mix
@@ -50,7 +68,7 @@ class NetWrapper(nn.Module):
         # 2. forward net_frame -> Bx1xC
         feat_frames = [None for n in range(N)]
         for n in range(N):
-            feat_frames[n] = self.net_frame.forward_multiframe(frames[n])
+            feat_frames[n] = self.net_frame.forward_multiframe(torch.stack(frames[n]))
             feat_frames[n] = torch.sigmoid(feat_frames[n])
 
         # 3. sound synthesizer

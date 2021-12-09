@@ -49,6 +49,7 @@ def train(model, loader, optimizer, args):
     # todo: what's this
     # torch.cuda.synchronize()
     for i, batch_data in enumerate(loader):
+        print('Batch ',i)
         # forward pass
         model.zero_grad()
         err, _ = model.forward(batch_data, args)
@@ -98,17 +99,18 @@ if __name__ == '__main__':
         'seed': None,
         'mix_num': 2,
         'split': 'train',
-        'batch_size': 80,
+        'batch_size': 1,#80
         'workers': 12,
         'print_interval_batch': 20,
         'evaluate_interval_epoch': 1,
         'num_epoch': 100,
         'ckeckpoint_path': 'ckpt/',
+        'device': torch.device('cpu'),
         # dataset
         'train_sample_list_path': 'data/train.csv',
         'train_samples_num': 256,
-        'val_sample_list_path': 'data/val.csv',
-        'val_samples_num': 40,
+        'validation_sample_list_path': 'data/val.csv',
+        'validation_samples_num': 40,
         # frames
         'frame_size': 224,
         'frames_per_video': 3,
@@ -121,13 +123,13 @@ if __name__ == '__main__':
         # STFT
         'log_freq': 1,
         'stft_frame': 1022,
-        'stft_hop': 256
+        'stft_hop': 256,
     }
 
 
     # nets
     nets = build_nets()
-    model = NetWrapper(nets)
+    model = NetWrapper(nets, args)
 
     # dataset and loader
     dataset_train = SolosMixDataset(args, 'train')
@@ -136,13 +138,13 @@ if __name__ == '__main__':
         dataset_train,
         batch_size=args['batch_size'],
         shuffle=True,
-        num_workers=int(args['workers']),
+        # num_workers=args['workers'],
         drop_last=True)
     loader_validation = torch.utils.data.DataLoader(
         dataset_validation,
         batch_size=args['batch_size'],
         shuffle=False,
-        num_workers=int(args['workers']),
+        # num_workers=args['workers'],
         drop_last=False)
 
     # optimizer
