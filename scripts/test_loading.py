@@ -49,5 +49,5 @@ class VideoSpliter():
 
 if __name__ == '__main__':
     spliter = VideoSpliter()
-    spliter.fromjson('data/video', 'data/frames', 'data/audio',
+    spliter.fromjson('data1/video', 'data1/frames', 'data1/audio',
                      os.path.split(sys.argv[0])[0]+'/solos.json')

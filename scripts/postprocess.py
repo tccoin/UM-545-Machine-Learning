@@ -3,6 +3,7 @@ import os
 import sys
 import ffmpeg
 
+
 class VideoSpliter(object):
     """split video into frames and audio files """
 
@@ -20,9 +21,12 @@ class VideoSpliter(object):
             if not os.path.exists(instrument_audio_dir):
                 os.makedirs(instrument_audio_dir)
             for i, video_id in enumerate(dataset[instrument]):
-                video_path = os.path.join(dataset_dir, instrument, video_id)+'.mp4'
-                audio_path = os.path.join(audio_dir, instrument, video_id+'.wav')
-                frames_dir_path = os.path.join(frames_dir, instrument, video_id+'.mp4')
+                video_path = os.path.join(
+                    dataset_dir, instrument, video_id)+'.mp4'
+                audio_path = os.path.join(
+                    audio_dir, instrument, video_id+'.wav')
+                frames_dir_path = os.path.join(
+                    frames_dir, instrument, video_id+'.mp4')
                 frame_existed = os.path.exists(frames_dir_path+'/0.jpg')
                 audio_existed = os.path.exists(audio_path)
                 video_existed = os.path.exists(video_path)
@@ -34,6 +38,8 @@ class VideoSpliter(object):
                             .input(video_path)
                             .filter('fps', fps=self.fps)
                             .filter('scale', -1, 224)
+                            .trim(start=0, end=45)
+                            .setpts('PTS-STARTPTS')
                             .output(frames_dir_path+'/%d.jpg',
                                     start_number=0)
                             .overwrite_output()
@@ -46,6 +52,7 @@ class VideoSpliter(object):
                         (
                             ffmpeg
                             .input(video_path)
+                            .filter('atrim', duration=45)
                             .output(audio_path, format='wav', ac=1, ar=11025)
                             .overwrite_output()
                             .run(quiet=False)
@@ -56,4 +63,5 @@ class VideoSpliter(object):
 
 if __name__ == '__main__':
     spliter = VideoSpliter()
-    spliter.fromjson('data/video', 'data/frames', 'data/audio', os.path.split(sys.argv[0])[0]+'/solos.json')
+    spliter.fromjson('data1/video', 'data1/frames', 'data1/audio',
+                     os.path.split(sys.argv[0])[0]+'/solos.json')
