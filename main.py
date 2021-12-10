@@ -41,7 +41,11 @@ def evaluate(model, loader, args):
     for i, batch_data in enumerate(loader):
         error, outputs = model.forward(batch_data, args)
         error_history.append(error.mean())
-    return torch.mean(torch.stack(error_history))
+    # record loss
+    loss = torch.mean(torch.stack(error_history))
+    args['history']['validation_loss'].append((args['current_epoch'], loss))
+    args['writer'].add_scalar('Loss/validation', loss, args['current_epoch'])
+    print('[Eval] Epoch {}, Loss: {:.4f}'.format(args['current_epoch']+1, loss))
         
 
 def train(model, loader, optimizer, args):
@@ -57,10 +61,11 @@ def train(model, loader, optimizer, args):
         err.backward()
         optimizer.step()
 
-        # print status
-        args['writer'].add_scalar('Loss/train', err, args['current_epoch']*len(loader)+i)
+        # record loss
+        args['history']['train_loss'].append((args['current_epoch']+i/len(loader), err))
+        args['writer'].add_scalar('Loss/train', err, args['current_epoch']+i/len(loader))
         if i % args['print_interval_batch'] == 0:
-            print('  Batch: [{}/{}], size={}'.format(i, len(loader), loader.batch_size))
+            print('  Batch: [{}/{}], size={}, loss={:.4f}'.format(i, len(loader), loader.batch_size, err))
 
 def calc_metrics():
     pass
@@ -126,6 +131,7 @@ if __name__ == '__main__':
     args['device'] = torch.device('cuda')
     args['writer'] = SummaryWriter()
     args['current_epoch'] = 0
+    args['history'] = {'train_loss':[], 'validation_loss':[]}
 
     # nets
     nets = build_nets()
@@ -164,8 +170,5 @@ if __name__ == '__main__':
             print('Epoch {}'.format(epoch+1))
             train(model, loader_train, optimizer, args)
             if epoch % args['evaluate_interval_epoch'] == 0:
-                loss = evaluate(model, loader_validation, args)
-                loss_history.append(loss)
-                args['writer'].add_scalar('Loss/validation', loss, epoch)
-                print('[Eval] Epoch {}, Loss: {:.4f}'.format(epoch+1, loss))
+                evaluate(model, loader_validation, args)
                 checkpoint(nets, loss_history, args)
