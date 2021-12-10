@@ -27,7 +27,7 @@ class NetWrapper(nn.Module):
 
     def forward(self, batch_data, args):
 
-        mag_mix = batch_data['mag_mix']
+        mag_mix = batch_data['mag_mix'].to(args['device'])
         mags = batch_data['mags']
         frames = batch_data['frames']
         mag_mix = mag_mix + 1e-10 
@@ -79,12 +79,12 @@ class NetWrapper(nn.Module):
 
         # 4. loss
 #         err = self.crit(pred_masks, gt_masks, weight).reshape(1)
-        if args['binary_mask']:
+        if args['use_binary_mask']:
             criterion = nn.BCELoss(weight=weight)
-            loss = criterion(pred_masks, gt_masks, weight).reshape(1)
+            loss = criterion(torch.stack(pred_masks), torch.stack(gt_masks))
         else: 
             criterion = nn.WL1Loss()
-            loss = criterion(pred_masks, gt_masks).reshape(1)
+            loss = criterion(torch.stack(pred_masks), torch.stack(gt_masks))
 
         return loss, \
             {'pred_masks': pred_masks, 'gt_masks': gt_masks,

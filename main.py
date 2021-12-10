@@ -40,7 +40,7 @@ def evaluate(model, loader, args):
     for i, batch_data in enumerate(loader):
         error, outputs = model.forward(batch_data, args)
         error_history.append(error.mean())
-    return torch.mean(error_history)
+    return torch.mean(torch.stack(error_history))
         
 
 def train(model, loader, optimizer, args):
@@ -49,7 +49,6 @@ def train(model, loader, optimizer, args):
     # todo: what's this
     # torch.cuda.synchronize()
     for i, batch_data in enumerate(loader):
-        print('Batch ',i)
         # forward pass
         model.zero_grad()
         err, _ = model.forward(batch_data, args)
@@ -60,8 +59,8 @@ def train(model, loader, optimizer, args):
         optimizer.step()
 
         # print status
-        if i % args['train_print_interval'] == 0:
-            print('Epoch: [{}][{}/{}]', format(0,i,0))
+        if i % args['print_interval_batch'] == 0:
+            print('  Batch: [{}/{}], size={}'.format(i, len(loader), loader.batch_size))
 
 def calc_metrics():
     pass
@@ -99,9 +98,9 @@ if __name__ == '__main__':
         'seed': None,
         'mix_num': 2,
         'split': 'train',
-        'batch_size': 1,#80
+        'batch_size': 6,#80
         'workers': 12,
-        'print_interval_batch': 20,
+        'print_interval_batch': 1,
         'evaluate_interval_epoch': 1,
         'num_epoch': 100,
         'ckeckpoint_path': 'ckpt/',
@@ -129,7 +128,7 @@ if __name__ == '__main__':
 
     # nets
     nets = build_nets()
-    model = NetWrapper(nets, args)
+    model = NetWrapper(nets, args).to(args['device'])
 
     # dataset and loader
     dataset_train = SolosMixDataset(args, 'train')
