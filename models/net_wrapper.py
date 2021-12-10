@@ -68,7 +68,7 @@ class NetWrapper(nn.Module):
         # 2. forward net_frame -> Bx1xC
         feat_frames = [None for n in range(N)]
         for n in range(N):
-            feat_frames[n] = self.net_frame.forward_multiframe(torch.stack(frames[n]))
+            feat_frames[n] = self.net_frame.forward_multiframe(frames[n])
             feat_frames[n] = torch.sigmoid(feat_frames[n])
 
         # 3. sound synthesizer

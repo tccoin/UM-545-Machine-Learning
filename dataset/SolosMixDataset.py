@@ -209,6 +209,7 @@ class SolosMixDataset():
             frames[n] = []
             for i, path in enumerate(path_frames[n]):
                 frames[n].append(self._load_frame(path))
+            frames[n] = torch.stack(frames[n])
             # jitter audio
             center_timeN = (center_frames[n] - 0.5) / self.args['frame_rate']
             audios[n] = self._load_audio(path_audios[n], center_timeN)
