@@ -28,11 +28,12 @@ class NetWrapper(nn.Module):
 
         # todo: what's this?
         # 0.0 warp the spectrogram
-        grid_warp = torch.from_numpy(
-            warpgrid(B, 256, T, warp=True)).to(args['device'])
-        mag_mix = F.grid_sample(mag_mix, grid_warp)
-        for n in range(N):
-            mags[n] = F.grid_sample(mags[n], grid_warp)
+        if args['log_freq']:
+            grid_warp = torch.from_numpy(
+                warpgrid(B, 256, T, warp=True)).to(args['device'])
+            mag_mix = F.grid_sample(mag_mix, grid_warp)
+            for n in range(N):
+                mags[n] = F.grid_sample(mags[n], grid_warp)
 
         # 0.1 calculate loss weighting coefficient: magnitude of input mixture
         weight = torch.log1p(mag_mix)

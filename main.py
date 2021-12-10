@@ -4,6 +4,7 @@ import torch.nn.functional as F
 from torch.utils.tensorboard import SummaryWriter
 
 import librosa
+import numpy as np
 
 from models.audio_net import Unet
 from models.vision_net import ResnetDilate
@@ -25,10 +26,11 @@ def build_nets():
 
 def build_optimizer(nets):
     (net_sound, net_frame, net_synthesizer) = nets
-    param_groups = [{'params': net_sound.parameters(), 'lr': 1e-3},
-                    {'params': net_synthesizer.parameters(), 'lr': 1e-3},
-                    {'params': net_frame.features.parameters(), 'lr': 1e-4},
-                    {'params': net_frame.fc.parameters(), 'lr': 1e-3}]
+    lr = 0.01
+    param_groups = [{'params': net_sound.parameters(), 'lr': lr},
+                    {'params': net_synthesizer.parameters(), 'lr': lr},
+                    {'params': net_frame.features.parameters(), 'lr': lr},
+                    {'params': net_frame.fc.parameters(), 'lr': lr}]
     return torch.optim.SGD(param_groups, momentum=0.9, weight_decay=1e-4)
 
 
@@ -47,10 +49,25 @@ def evaluate(model, loader, args):
     torch.set_grad_enabled(False)
     model.eval()
     error_history = []
+    metrics_list = []  # sdr_mix, sdr, sir, sar
+
     for i, batch_data in enumerate(loader):
         error, outputs = model.forward(batch_data, args)
         error_history.append(error.mean())
+        metrics_list.append(calc_metrics(batch_data, outputs, args))
     # record loss
+    metrics_list = np.array(metrics_list)
+    metrics = np.mean(metrics_list, axis=0)
+    args['writer'].add_scalar(
+        'Metrics/sdr_mix', metrics[0], args['current_epoch']+1)
+    args['writer'].add_scalar(
+        'Metrics/sdr', metrics[1], args['current_epoch']+1)
+    args['writer'].add_scalar(
+        'Metrics/sir', metrics[2], args['current_epoch']+1)
+    args['writer'].add_scalar(
+        'Metrics/sar', metrics[3], args['current_epoch']+1)
+    args['history']['metrics'].append(
+        (args['current_epoch'], metrics))
     loss = torch.mean(torch.stack(error_history))
     args['history']['validation_loss'].append((args['current_epoch'], loss))
     args['writer'].add_scalar('Loss/validation', loss, args['current_epoch']+1)
@@ -107,7 +124,7 @@ if __name__ == '__main__':
         'audio_length': 65535,
         'use_binary_mask': True,
         # STFT
-        'log_freq': 1,
+        'log_freq': True,
         'stft_frame': 1022,
         'stft_hop': 256,
     }
@@ -116,7 +133,7 @@ if __name__ == '__main__':
     args['writer'] = SummaryWriter()
     args['current_epoch'] = 0
     args['seed'] = random.randint(0, 10000)
-    args['history'] = {'train_loss': [], 'validation_loss': []}
+    args['history'] = {'train_loss': [], 'validation_loss': [], 'metrics': []}
 
     # nets
     nets = build_nets()

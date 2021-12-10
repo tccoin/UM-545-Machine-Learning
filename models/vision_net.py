@@ -10,17 +10,16 @@ class ResnetDilate(nn.Module):
     def __init__(self, K=16):
         super(ResnetDilate, self).__init__()
 
-        original_net = torchvision.models.resnet18(pretrained=True)
+        original_net = torchvision.models.resnet18(pretrained=False)
 
         # Remove the stride of the last residual block
         original_net.layer4.apply(partial(self._nostride_dilate, dilate=2))
-        
+
         # Remove the last two layers of the ResNet - average pooling & fc
         self.features = nn.Sequential(*list(original_net.children())[:-2])
-        
+
         # Add 3x3 convolution layer with K output channels
         self.fc = nn.Conv2d(512, K, kernel_size=3, padding=1)
-
 
     def forward(self, x):
         x = self.features(x)
@@ -29,7 +28,6 @@ class ResnetDilate(nn.Module):
         x = x.view(x.size(0), x.size(1))
 
         return x
-
 
     def forward_multiframe(self, X):
         (B, C, T, H, W) = X.size()
@@ -44,9 +42,8 @@ class ResnetDilate(nn.Module):
         X = X.permute(0, 2, 1, 3, 4)
         X = F.adaptive_max_pool3d(X, 1)
         X = X.view(B, C)
-        
-        return X
 
+        return X
 
     def _nostride_dilate(self, m, dilate):
         classname = m.__class__.__name__

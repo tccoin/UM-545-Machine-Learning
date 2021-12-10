@@ -2,6 +2,7 @@ import numpy as np
 import librosa
 from mir_eval.separation import bss_eval_sources
 import torch
+import torch.nn.functional as F
 
 
 def warpgrid(bs, HO, WO, warp=True):
@@ -44,13 +45,13 @@ def calc_metrics(batch_data, outputs, args):
     pred_masks_ = outputs['pred_masks']
 
     # unwarp log scale
-    N = args.num_mix
+    N = args['mix_num']
     B = mag_mix.size(0)
     pred_masks_linear = [None for n in range(N)]
     for n in range(N):
-        if args.log_freq:
+        if args['log_freq']:
             grid_unwarp = torch.from_numpy(
-                warpgrid(B, args.stft_frame//2+1, pred_masks_[0].size(3), warp=False)).to(args.device)
+                warpgrid(B, args['stft_frame']//2+1, pred_masks_[0].size(3), warp=False)).to(args['device'])
             pred_masks_linear[n] = F.grid_sample(pred_masks_[n], grid_unwarp)
         else:
             pred_masks_linear[n] = pred_masks_[n]
@@ -62,15 +63,15 @@ def calc_metrics(batch_data, outputs, args):
         pred_masks_linear[n] = pred_masks_linear[n].detach().cpu().numpy()
 
         # threshold if binary mask
-        if args.binary_mask:
+        if args['use_binary_mask']:
             pred_masks_linear[n] = (
-                pred_masks_linear[n] > args.mask_thres).astype(np.float32)
+                pred_masks_linear[n] > 0.5).astype(np.float32)
 
     # loop over each sample
     for j in range(B):
         # save mixture
         mix_wav = istft_reconstruction(
-            mag_mix[j, 0], phase_mix[j, 0], hop_length=args.stft_hop)
+            mag_mix[j, 0], phase_mix[j, 0], hop_length=args['stft_frame'])
 
         # save each component
         preds_wav = [None for n in range(N)]
@@ -78,7 +79,7 @@ def calc_metrics(batch_data, outputs, args):
             # Predicted audio recovery
             pred_mag = mag_mix[j, 0] * pred_masks_linear[n][j, 0]
             preds_wav[n] = istft_reconstruction(
-                pred_mag, phase_mix[j, 0], hop_length=args.stft_hop)
+                pred_mag, phase_mix[j, 0], hop_length=args['stft_hop'])
 
         # separation performance computes
         L = preds_wav[0].shape[0]
@@ -94,12 +95,12 @@ def calc_metrics(batch_data, outputs, args):
             sdr_mix, _, _, _ = bss_eval_sources(np.asarray(gts_wav), np.asarray(
                 [mix_wav[0:L] for n in range(N)]), compute_permutation=False)
 
-            sdr_mix_meter.update(sdr_mix.mean())
-            sdr_meter.update(sdr.mean())
-            sir_meter.update(sir.mean())
-            sar_meter.update(sar.mean())
+            sdr_mix_meter.append(sdr_mix.mean())
+            sdr_meter.append(sdr.mean())
+            sir_meter.append(sir.mean())
+            sar_meter.append(sar.mean())
 
-    return [sdr_mix_meter.average(), sdr_meter.average(), sir_meter.average(), sar_meter.average()]
+    return [np.mean(sdr_mix_meter), np.mean(sdr_meter), np.mean(sir_meter), np.mean(sar_meter)]
 
 
 def save_checkpoint(model, optimizer, args):
@@ -138,3 +139,8 @@ def load_checkpoint(path, model, optimizer, args):
     for i, loss in args['history']['train_loss']:
         args['writer'].add_scalar(
             'Loss/train', loss, i)
+    for i, metrics in args['history']['metrics']:
+        args['writer'].add_scalar('Metrics/sdr_mix', metrics[0], i+1)
+        args['writer'].add_scalar('Metrics/sdr', metrics[1], i+1)
+        args['writer'].add_scalar('Metrics/sir', metrics[2], i+1)
+        args['writer'].add_scalar('Metrics/sar', metrics[3], i+1)
