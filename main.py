@@ -8,9 +8,12 @@ import librosa
 from models.audio_net import Unet
 from models.vision_net import ResnetDilate
 from models.synthesizer_net import SynthesizerNet
-from models.net_wrapper import NetWrapper
+from net_wrapper import NetWrapper
 from models.metrics import AverageMeter
 from dataset.SolosMixDataset import SolosMixDataset
+from utils import save_checkpoint, load_checkpoint, calc_metrics
+import random
+
 
 def build_nets():
     return (
@@ -19,6 +22,7 @@ def build_nets():
         SynthesizerNet()
     )
 
+
 def build_optimizer(nets):
     (net_sound, net_frame, net_synthesizer) = nets
     param_groups = [{'params': net_sound.parameters(), 'lr': 1e-3},
@@ -26,6 +30,7 @@ def build_optimizer(nets):
                     {'params': net_frame.features.parameters(), 'lr': 1e-4},
                     {'params': net_frame.fc.parameters(), 'lr': 1e-3}]
     return torch.optim.SGD(param_groups, momentum=0.9, weight_decay=1e-4)
+
 
 def weights_init(layer):
     classname = layer.__class__.__name__
@@ -37,6 +42,7 @@ def weights_init(layer):
     elif classname.find('Linear') != -1:
         layer.weight.data.normal_(0.0, 0.0001)
 
+
 def evaluate(model, loader, args):
     torch.set_grad_enabled(False)
     model.eval()
@@ -47,9 +53,10 @@ def evaluate(model, loader, args):
     # record loss
     loss = torch.mean(torch.stack(error_history))
     args['history']['validation_loss'].append((args['current_epoch'], loss))
-    args['writer'].add_scalar('Loss/validation', loss, args['current_epoch'])
-    print('[Eval] Epoch {}, Loss: {:.4f}'.format(args['current_epoch']+1, loss))
-        
+    args['writer'].add_scalar('Loss/validation', loss, args['current_epoch']+1)
+    print('[Eval] Epoch {}, Loss: {:.4f}'.format(
+        args['current_epoch']+1, loss))
+
 
 def train(model, loader, optimizer, args):
     torch.set_grad_enabled(True)
@@ -65,111 +72,12 @@ def train(model, loader, optimizer, args):
         optimizer.step()
 
         # record loss
-        args['history']['train_loss'].append((args['current_epoch']+i/len(loader), err))
-        args['writer'].add_scalar('Loss/train', err, args['current_epoch']+i/len(loader))
+        total_batch_number = args['current_epoch']*len(loader)+i
+        args['history']['train_loss'].append((total_batch_number, err))
+        args['writer'].add_scalar('Loss/train', err, total_batch_number)
         if i % args['print_interval_batch'] == 0:
-            print('  Batch: [{}/{}], size={}, loss={:.4f}'.format(i, len(loader), loader.batch_size, err))
-
-            
-            
-# audio signal reconstruction and final model evaluations
-def istft_reconstruction(mag, phase, hop_length=256):
-    spec = mag.astype(np.complex) * np.exp(1j*phase)
-    wav = librosa.istft(spec, hop_length=hop_length)
-    return np.clip(wav, -1., 1.)
-               
-            
-def calc_metrics():
-    # meters
-    sdr_mix_meter = AverageMeter()
-    sdr_meter = AverageMeter()
-    sir_meter = AverageMeter()
-    sar_meter = AverageMeter()
-
-    # fetch data and predictions
-    mag_mix = batch_data['mag_mix']
-    phase_mix = batch_data['phase_mix']
-    audios = batch_data['audios']
-
-    pred_masks_ = outputs['pred_masks']
-
-    # unwarp log scale
-    N = args.num_mix
-    B = mag_mix.size(0)
-    pred_masks_linear = [None for n in range(N)]
-    for n in range(N):
-        if args.log_freq:
-            grid_unwarp = torch.from_numpy(
-                warpgrid(B, args.stft_frame//2+1, pred_masks_[0].size(3), warp=False)).to(args.device)
-            pred_masks_linear[n] = F.grid_sample(pred_masks_[n], grid_unwarp)
-        else:
-            pred_masks_linear[n] = pred_masks_[n]
-
-    # convert into numpy
-    mag_mix = mag_mix.numpy()
-    phase_mix = phase_mix.numpy()
-    for n in range(N):
-        pred_masks_linear[n] = pred_masks_linear[n].detach().cpu().numpy()
-
-        # threshold if binary mask
-        if args.binary_mask:
-            pred_masks_linear[n] = (pred_masks_linear[n] > args.mask_thres).astype(np.float32)
-
-    # loop over each sample
-    for j in range(B):
-        # save mixture
-        mix_wav = istft_reconstruction(mag_mix[j, 0], phase_mix[j, 0], hop_length=args.stft_hop)
-
-        # save each component
-        preds_wav = [None for n in range(N)]
-        for n in range(N):
-            # Predicted audio recovery
-            pred_mag = mag_mix[j, 0] * pred_masks_linear[n][j, 0]
-            preds_wav[n] = istft_reconstruction(pred_mag, phase_mix[j, 0], hop_length=args.stft_hop)
-
-        # separation performance computes
-        L = preds_wav[0].shape[0]
-        gts_wav = [None for n in range(N)]
-        valid = True
-        for n in range(N):
-            gts_wav[n] = audios[n][j, 0:L].numpy()
-            valid *= np.sum(np.abs(gts_wav[n])) > 1e-5
-            valid *= np.sum(np.abs(preds_wav[n])) > 1e-5
-        if valid:
-            sdr, sir, sar, _ = bss_eval_sources(np.asarray(gts_wav), np.asarray(preds_wav), compute_permutation=False)
-            sdr_mix, _, _, _ = bss_eval_sources(np.asarray(gts_wav), np.asarray([mix_wav[0:L] for n in range(N)]), compute_permutation=False)
-            
-            sdr_mix_meter.update(sdr_mix.mean())
-            sdr_meter.update(sdr.mean())
-            sir_meter.update(sir.mean())
-            sar_meter.update(sar.mean())
-
-    return [sdr_mix_meter.average(), sdr_meter.average(), sir_meter.average(),sar_meter.average()]
-
-
-def checkpoint(nets, history, args):
-    (net_sound, net_frame, net_synthesizer) = nets
-    suffix_latest = 'latest.pth'
-    suffix_best = 'best.pth'
-    path = args['ckeckpoint_path']
-
-    torch.save(history,
-               '{}/history_{}'.format(path, suffix_latest))
-    torch.save(net_sound.state_dict(),
-               '{}/sound_{}'.format(path, suffix_latest))
-    torch.save(net_frame.state_dict(),
-               '{}/frame_{}'.format(path, suffix_latest))
-    torch.save(net_synthesizer.state_dict(),
-               '{}/synthesizer_{}'.format(path, suffix_latest))
-
-    if min(history)==history[-1]:
-        torch.save(net_sound.state_dict(),
-                   '{}/sound_{}'.format(path, suffix_best))
-        torch.save(net_frame.state_dict(),
-                   '{}/frame_{}'.format(path, suffix_best))
-        torch.save(net_synthesizer.state_dict(),
-                   '{}/synthesizer_{}'.format(path, suffix_best))
-    
+            print('  Batch: [{}/{}], size={}, loss={:.4f}'.format(i,
+                  len(loader), loader.batch_size, err))
 
 
 if __name__ == '__main__':
@@ -179,7 +87,7 @@ if __name__ == '__main__':
         'seed': None,
         'mix_num': 2,
         'batch_size': 24,
-        'workers': 12,
+        'workers': 4,
         'print_interval_batch': 1,
         'evaluate_interval_epoch': 1,
         'num_epoch': 100,
@@ -207,11 +115,16 @@ if __name__ == '__main__':
     args['device'] = torch.device('cuda')
     args['writer'] = SummaryWriter()
     args['current_epoch'] = 0
-    args['history'] = {'train_loss':[], 'validation_loss':[]}
+    args['seed'] = random.randint(0, 10000)
+    args['history'] = {'train_loss': [], 'validation_loss': []}
 
     # nets
     nets = build_nets()
     model = NetWrapper(nets, args).to(args['device'])
+    optimizer = build_optimizer(nets)
+
+    # load checkpoint
+    # load_checkpoint('ckpt/latest.pth', model, optimizer, args)
 
     # dataset and loader
     dataset_train = SolosMixDataset(args, 'train')
@@ -229,9 +142,6 @@ if __name__ == '__main__':
         # num_workers=args['workers'],
         drop_last=False)
 
-    # optimizer
-    optimizer = build_optimizer(nets)
-
     if args['mode'] == 'evaluate':
         # evaluate mode
         loss = evaluate(model, loader_validation, args)
@@ -240,11 +150,10 @@ if __name__ == '__main__':
         # train mode
         epoch_iters = len(dataset_train)
         print('1 Epoch = {} iters'.format(epoch_iters))
-        loss_history = []
-        for epoch in range(args['num_epoch']):
+        for epoch in range(args['current_epoch'], args['num_epoch']):
             args['current_epoch'] = epoch
             print('Epoch {}'.format(epoch+1))
             train(model, loader_train, optimizer, args)
             if epoch % args['evaluate_interval_epoch'] == 0:
                 evaluate(model, loader_validation, args)
-                checkpoint(nets, loss_history, args)
+                save_checkpoint(model, optimizer, args)

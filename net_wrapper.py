@@ -1,23 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import numpy as np
+from utils import warpgrid
 
-def warpgrid(bs, HO, WO, warp=True):
-    # meshgrid
-    x = np.linspace(-1, 1, WO)
-    y = np.linspace(-1, 1, HO)
-    xv, yv = np.meshgrid(x, y)
-    grid = np.zeros((bs, HO, WO, 2))
-    grid_x = xv
-    if warp:
-        grid_y = (np.power(21, (yv+1)/2) - 11) / 10
-    else:
-        grid_y = np.log(yv * 10 + 11) / np.log(21) * 2 - 1
-    grid[:, :, :, 0] = grid_x
-    grid[:, :, :, 1] = grid_y
-    grid = grid.astype(np.float32)
-    return grid
 
 class NetWrapper(nn.Module):
     def __init__(self, nets, args):
@@ -31,7 +16,6 @@ class NetWrapper(nn.Module):
         mags = batch_data['mags']
         frames = batch_data['frames']
         mag_mix = mag_mix + 1e-10
-        
 
         N = self.args['mix_num']
         B = mag_mix.size(0)
@@ -49,12 +33,10 @@ class NetWrapper(nn.Module):
         mag_mix = F.grid_sample(mag_mix, grid_warp)
         for n in range(N):
             mags[n] = F.grid_sample(mags[n], grid_warp)
-        
 
         # 0.1 calculate loss weighting coefficient: magnitude of input mixture
         weight = torch.log1p(mag_mix)
         weight = torch.clamp(weight, 1e-3, 10)
-        
 
         # 0.2 ground truth masks are computed after warpping!
         gt_masks = [None for n in range(N)]
@@ -80,7 +62,8 @@ class NetWrapper(nn.Module):
         # 3. sound synthesizer
         pred_masks = [None for n in range(N)]
         for n in range(N):
-            pred_masks[n] = self.net_synthesizer(feat_frames[n], sound_features)
+            pred_masks[n] = self.net_synthesizer(
+                feat_frames[n], sound_features)
             pred_masks[n] = torch.sigmoid(pred_masks[n])
 
         # 4. loss
@@ -88,7 +71,7 @@ class NetWrapper(nn.Module):
         if args['use_binary_mask']:
             criterion = nn.BCELoss(weight=weight)
             loss = criterion(torch.stack(pred_masks), torch.stack(gt_masks))
-        else: 
+        else:
             criterion = nn.WL1Loss()
             loss = criterion(torch.stack(pred_masks), torch.stack(gt_masks))
 
