@@ -1,6 +1,7 @@
 import torch
 import torchvision
 import torch.nn.functional as F
+from torch.utils.tensorboard import SummaryWriter
 
 from models.audio_net import Unet
 from models.vision_net import ResnetDilate
@@ -46,8 +47,6 @@ def evaluate(model, loader, args):
 def train(model, loader, optimizer, args):
     torch.set_grad_enabled(True)
     model.train()
-    # todo: what's this
-    # torch.cuda.synchronize()
     for i, batch_data in enumerate(loader):
         # forward pass
         model.zero_grad()
@@ -59,6 +58,7 @@ def train(model, loader, optimizer, args):
         optimizer.step()
 
         # print status
+        args['writer'].add_scalar('Loss/train', err, args['current_epoch']*len(loader)+i)
         if i % args['print_interval_batch'] == 0:
             print('  Batch: [{}/{}], size={}'.format(i, len(loader), loader.batch_size))
 
@@ -97,13 +97,12 @@ if __name__ == '__main__':
         'mode': 'train',
         'seed': None,
         'mix_num': 2,
-        'batch_size': 6,#80
+        'batch_size': 24,
         'workers': 12,
         'print_interval_batch': 1,
         'evaluate_interval_epoch': 1,
         'num_epoch': 100,
         'ckeckpoint_path': 'ckpt/',
-        'device': torch.device('cuda'),
         # dataset
         'train_sample_list_path': 'data/train.csv',
         'train_samples_num': 256,
@@ -124,6 +123,9 @@ if __name__ == '__main__':
         'stft_hop': 256,
     }
 
+    args['device'] = torch.device('cuda')
+    args['writer'] = SummaryWriter()
+    args['current_epoch'] = 0
 
     # nets
     nets = build_nets()
@@ -158,10 +160,12 @@ if __name__ == '__main__':
         print('1 Epoch = {} iters'.format(epoch_iters))
         loss_history = []
         for epoch in range(args['num_epoch']):
+            args['current_epoch'] = epoch
             print('Epoch {}'.format(epoch+1))
             train(model, loader_train, optimizer, args)
             if epoch % args['evaluate_interval_epoch'] == 0:
                 loss = evaluate(model, loader_validation, args)
                 loss_history.append(loss)
-                print('[Eval] Epoch {}, Loss: {:.4f}'.format(epoch, loss))
+                args['writer'].add_scalar('Loss/validation', loss, epoch)
+                print('[Eval] Epoch {}, Loss: {:.4f}'.format(epoch+1, loss))
                 checkpoint(nets, loss_history, args)
