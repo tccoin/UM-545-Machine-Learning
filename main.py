@@ -3,10 +3,13 @@ import torchvision
 import torch.nn.functional as F
 from torch.utils.tensorboard import SummaryWriter
 
+import librosa
+
 from models.audio_net import Unet
 from models.vision_net import ResnetDilate
 from models.synthesizer_net import SynthesizerNet
 from models.net_wrapper import NetWrapper
+from models.metrics import AverageMeter
 from dataset.SolosMixDataset import SolosMixDataset
 
 def build_nets():
@@ -62,8 +65,81 @@ def train(model, loader, optimizer, args):
         if i % args['print_interval_batch'] == 0:
             print('  Batch: [{}/{}], size={}'.format(i, len(loader), loader.batch_size))
 
+            
+            
+# audio signal reconstruction and final model evaluations
+def istft_reconstruction(mag, phase, hop_length=256):
+    spec = mag.astype(np.complex) * np.exp(1j*phase)
+    wav = librosa.istft(spec, hop_length=hop_length)
+    return np.clip(wav, -1., 1.)
+               
+            
 def calc_metrics():
-    pass
+    # meters
+    sdr_mix_meter = AverageMeter()
+    sdr_meter = AverageMeter()
+    sir_meter = AverageMeter()
+    sar_meter = AverageMeter()
+
+    # fetch data and predictions
+    mag_mix = batch_data['mag_mix']
+    phase_mix = batch_data['phase_mix']
+    audios = batch_data['audios']
+
+    pred_masks_ = outputs['pred_masks']
+
+    # unwarp log scale
+    N = args.num_mix
+    B = mag_mix.size(0)
+    pred_masks_linear = [None for n in range(N)]
+    for n in range(N):
+        if args.log_freq:
+            grid_unwarp = torch.from_numpy(
+                warpgrid(B, args.stft_frame//2+1, pred_masks_[0].size(3), warp=False)).to(args.device)
+            pred_masks_linear[n] = F.grid_sample(pred_masks_[n], grid_unwarp)
+        else:
+            pred_masks_linear[n] = pred_masks_[n]
+
+    # convert into numpy
+    mag_mix = mag_mix.numpy()
+    phase_mix = phase_mix.numpy()
+    for n in range(N):
+        pred_masks_linear[n] = pred_masks_linear[n].detach().cpu().numpy()
+
+        # threshold if binary mask
+        if args.binary_mask:
+            pred_masks_linear[n] = (pred_masks_linear[n] > args.mask_thres).astype(np.float32)
+
+    # loop over each sample
+    for j in range(B):
+        # save mixture
+        mix_wav = istft_reconstruction(mag_mix[j, 0], phase_mix[j, 0], hop_length=args.stft_hop)
+
+        # save each component
+        preds_wav = [None for n in range(N)]
+        for n in range(N):
+            # Predicted audio recovery
+            pred_mag = mag_mix[j, 0] * pred_masks_linear[n][j, 0]
+            preds_wav[n] = istft_reconstruction(pred_mag, phase_mix[j, 0], hop_length=args.stft_hop)
+
+        # separation performance computes
+        L = preds_wav[0].shape[0]
+        gts_wav = [None for n in range(N)]
+        valid = True
+        for n in range(N):
+            gts_wav[n] = audios[n][j, 0:L].numpy()
+            valid *= np.sum(np.abs(gts_wav[n])) > 1e-5
+            valid *= np.sum(np.abs(preds_wav[n])) > 1e-5
+        if valid:
+            sdr, sir, sar, _ = bss_eval_sources(np.asarray(gts_wav), np.asarray(preds_wav), compute_permutation=False)
+            sdr_mix, _, _, _ = bss_eval_sources(np.asarray(gts_wav), np.asarray([mix_wav[0:L] for n in range(N)]), compute_permutation=False)
+            
+            sdr_mix_meter.update(sdr_mix.mean())
+            sdr_meter.update(sdr.mean())
+            sir_meter.update(sir.mean())
+            sar_meter.update(sar.mean())
+
+    return [sdr_mix_meter.average(), sdr_meter.average(), sir_meter.average(),sar_meter.average()]
 
 
 def checkpoint(nets, history, args):
