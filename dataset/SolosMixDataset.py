@@ -10,7 +10,7 @@ import librosa
 import warnings
 warnings.filterwarnings('ignore')
 
-class SolosMixDataset():
+class SolosMixDataset(torchdata.Dataset):
     def __init__(self, args, split):
 
         self.args = args
@@ -116,7 +116,7 @@ class SolosMixDataset():
             audio_raw[start:end]
 
         # randomize volume
-        if self.args['split'] == 'train':
+        if self.split == 'train':
             scale = random.random() + 0.5     # 0.5-1.5
             audio *= scale
         audio[audio > 1.] = 1.
@@ -176,7 +176,7 @@ class SolosMixDataset():
         infos[0] = self.sample_list[index]
 
         # sample other videos
-        if not self.args['split'] == 'train':
+        if not self.split == 'train':
             random.seed(index)
         for n in range(1, N):
             indexN = random.randint(0, len(self.sample_list)-1)
@@ -188,7 +188,7 @@ class SolosMixDataset():
         for n, infoN in enumerate(infos):
             path_audioN, path_frameN, count_framesN = infoN
 
-            if self.args['split'] == 'train':
+            if self.split == 'train':
                 # random, not to sample start and end n-frames
                 center_frameN = random.randint(idx_margin+1, int(count_framesN)-idx_margin)
             else:
@@ -221,13 +221,12 @@ class SolosMixDataset():
         #     mag_mix, mags, frames, audios, phase_mix = self.dummy_mix_data(N)
 
         ret_dict = {'mag_mix': mag_mix, 'frames': frames, 'mags': mags}
-        if self.args['split'] != 'train':
+        if self.split != 'train':
             ret_dict['audios'] = audios
             ret_dict['phase_mix'] = phase_mix
             ret_dict['infos'] = infos
 
         return ret_dict
-
 
 if __name__ == '__main__':
     args = {
@@ -235,7 +234,6 @@ if __name__ == '__main__':
         'mode': 'train',
         'seed': None,
         'mix_num': 2,
-        'split': 'train',
         'batch_size': 10,
         'workers': 12,
         # dataset
@@ -263,7 +261,6 @@ if __name__ == '__main__':
         dataset_train,
         batch_size=args['batch_size'],
         shuffle=True,
-        # num_workers=int(args['workers']),
         drop_last=True)
     for i, batch_data in enumerate(loader):
         print(i)

@@ -27,14 +27,20 @@ class NetWrapper(nn.Module):
 
     def forward(self, batch_data, args):
 
-        mag_mix = batch_data['mag_mix'].to(args['device'])
+        mag_mix = batch_data['mag_mix']
         mags = batch_data['mags']
         frames = batch_data['frames']
-        mag_mix = mag_mix + 1e-10 
+        mag_mix = mag_mix + 1e-10
+        
 
         N = self.args['mix_num']
         B = mag_mix.size(0)
         T = mag_mix.size(3)
+
+        # to_device
+        mag_mix = mag_mix.to(args['device'])
+        frames = [frames[i].to(args['device']) for i in range(N)]
+        mags = [mags[i].to(args['device']) for i in range(N)]
 
         # todo: what's this?
         # 0.0 warp the spectrogram

@@ -97,14 +97,13 @@ if __name__ == '__main__':
         'mode': 'train',
         'seed': None,
         'mix_num': 2,
-        'split': 'train',
         'batch_size': 6,#80
         'workers': 12,
         'print_interval_batch': 1,
         'evaluate_interval_epoch': 1,
         'num_epoch': 100,
         'ckeckpoint_path': 'ckpt/',
-        'device': torch.device('cpu'),
+        'device': torch.device('cuda'),
         # dataset
         'train_sample_list_path': 'data/train.csv',
         'train_samples_num': 256,
