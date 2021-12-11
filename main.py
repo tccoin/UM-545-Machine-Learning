@@ -47,7 +47,7 @@ def weights_init(layer):
         layer.weight.data.normal_(0.0, 0.0001)
 
 
-def evaluate(model, loader, args):
+def test(model, loader, args):
     torch.set_grad_enabled(False)
     model.eval()
     error_history = []
@@ -66,6 +66,22 @@ def evaluate(model, loader, args):
     args['writer'].add_scalar('Metrics/sir', metrics[2], epoch_num)
     args['writer'].add_scalar('Metrics/sar', metrics[3], epoch_num)
     args['history']['metrics'].append((args['current_epoch'], metrics))
+    loss = torch.mean(torch.stack(error_history))
+    args['history']['test_loss'].append((args['current_epoch'], loss))
+    args['writer'].add_scalar('Loss/test', loss, epoch_num)
+    print('[Test] Epoch {}, Loss: {:.4f}'.format(epoch_num, loss))
+
+
+def evaluate(model, loader, args):
+    torch.set_grad_enabled(False)
+    model.eval()
+    error_history = []
+
+    for i, batch_data in enumerate(loader):
+        error, outputs = model.forward(batch_data, args)
+        error_history.append(error.mean())
+    # record loss
+    epoch_num = args['current_epoch']+1
     loss = torch.mean(torch.stack(error_history))
     args['history']['validation_loss'].append((args['current_epoch'], loss))
     args['writer'].add_scalar('Loss/validation', loss, epoch_num)
@@ -105,7 +121,7 @@ def train(model, loader, optimizer, args):
         args['history']['train_loss'].append((total_batch_number, err))
         args['writer'].add_scalar('Loss/train', err, total_batch_number)
         if i % args['print_interval_batch'] == 0:
-            print('  Batch: [{}/{}], size={}, loss={:.4f}'.format(i,
+            print('  Batch: [{}/{}], size={}, loss={:.4f}'.format(i+1,
                   len(loader), loader.batch_size, err))
 
 
@@ -155,48 +171,44 @@ if __name__ == '__main__':
     args['current_epoch'] = 0
     # args['seed'] = random.randint(0, 10000)
     args['seed'] = 6480
-    args['history'] = {'train_loss': [], 'validation_loss': [], 'metrics': []}
+    args['history'] = {'train_loss': [],
+                       'validation_loss': [], 'test_loss': [], 'metrics': []}
 
     # nets
     nets = build_nets()
     model = NetWrapper(nets, args).to(args['device'])
     optimizer = build_optimizer(nets)
 
+    # dataset and loader
+    dataset_train = SolosMixDataset(args, 'train')
+    dataset_validation = SolosMixDataset(args, 'validation')
+    dataset_test = UrmpDataset(args, 'test')
+    loader_train = torch.utils.data.DataLoader(
+        dataset_train,
+        batch_size=args['batch_size'],
+        shuffle=True,
+        # num_workers=args['workers'],
+        drop_last=True)
+    loader_validation = torch.utils.data.DataLoader(
+        dataset_validation,
+        batch_size=args['batch_size'],
+        shuffle=False,
+        # num_workers=args['workers'],
+        drop_last=False)
+    loader_test = torch.utils.data.DataLoader(
+        dataset_test,
+        batch_size=args['batch_size'],
+        shuffle=True,
+        # num_workers=args['workers'],
+        drop_last=True)
+
     # load checkpoint
     # load_checkpoint('ckpt/latest.pth', model, optimizer, args)
 
     if args['mode'] == 'test':
-
-        # dataset and loader
-        dataset_test = UrmpDataset(args, 'test')
-        loader_test = torch.utils.data.DataLoader(
-            dataset_test,
-            batch_size=args['batch_size'],
-            shuffle=True,
-            # num_workers=args['workers'],
-            drop_last=True)
-
         # test mode
-        evaluate(model, loader_test, args)
-
+        test(model, loader_test, args)
     elif args['mode'] == 'train':
-
-        # dataset and loader
-        dataset_train = SolosMixDataset(args, 'train')
-        dataset_validation = SolosMixDataset(args, 'validation')
-        loader_train = torch.utils.data.DataLoader(
-            dataset_train,
-            batch_size=args['batch_size'],
-            shuffle=True,
-            # num_workers=args['workers'],
-            drop_last=True)
-        loader_validation = torch.utils.data.DataLoader(
-            dataset_validation,
-            batch_size=args['batch_size'],
-            shuffle=False,
-            # num_workers=args['workers'],
-            drop_last=False)
-
         # train
         epoch_iters = len(dataset_train)
         print('1 Epoch = {} iters'.format(epoch_iters))
@@ -204,6 +216,7 @@ if __name__ == '__main__':
             args['current_epoch'] = epoch
             print('Epoch {}'.format(epoch+1))
             train(model, loader_train, optimizer, args)
+            evaluate(model, loader_validation, args)
             if epoch % args['evaluate_interval_epoch'] == 0:
-                evaluate(model, loader_validation, args)
+                test(model, loader_test, args)
                 save_checkpoint(model, optimizer, args)
