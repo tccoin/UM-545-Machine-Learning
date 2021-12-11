@@ -16,22 +16,23 @@ from utils import save_checkpoint, load_checkpoint, calc_metrics
 import random
 
 
-def build_nets():
+def build_nets(args):
     return (
         Unet(),
-        ResnetDilate(),
+        ResnetDilate(pretrained=args['resnet_pretrained']),
         SynthesizerNet()
     )
 
 
-def build_optimizer(nets):
+def build_optimizer(nets, args):
     (net_sound, net_frame, net_synthesizer) = nets
-    lr = 0.01
-    param_groups = [{'params': net_sound.parameters(), 'lr': lr},
-                    {'params': net_synthesizer.parameters(), 'lr': lr},
-                    {'params': net_frame.features.parameters(), 'lr': lr},
-                    {'params': net_frame.fc.parameters(), 'lr': lr}]
-    return torch.optim.SGD(param_groups, momentum=0.9, weight_decay=1e-3)
+    param_groups = [{'params': net_sound.parameters(), 'lr': args['net_sound_lr']},
+                    {'params': net_synthesizer.parameters(
+                    ), 'lr': args['net_synthesizer_lr']},
+                    {'params': net_frame.features.parameters(),
+                     'lr': args['net_frames_lr']},
+                    {'params': net_frame.fc.parameters(), 'lr': args['net_frames_lr']}]
+    return torch.optim.SGD(param_groups, momentum=0.9, weight_decay=args['weight_decay'])
 
 
 def weights_init(layer):
@@ -112,18 +113,25 @@ if __name__ == '__main__':
         # general
         'mode': 'train',
         'seed': None,
-        'mix_num': 2,
         'batch_size': 24,
-        'workers': 4,
+        'workers': 24,
         'print_interval_batch': 1,
         'evaluate_interval_epoch': 5,
-        'num_epoch': 100,
         'ckeckpoint_path': 'ckpt/',
+        # training
+        'num_epoch': 100,
+        'net_sound_lr': 1e-3,
+        'net_frames_lr': 1e-3,
+        'net_synthesizer_lr': 1e-3,
+        'net_synthesizer_lr': 1e-3,
+        'weight_decay': 1e-3,
+        'resnet_pretrained': True,
         # dataset
-        'train_sample_list_path': 'data/train.csv',
+        'mix_num': 2,
         'train_samples_num': 256,
-        'validation_sample_list_path': 'data/val.csv',
         'validation_samples_num': 40,
+        'train_sample_list_path': 'data/train.csv',
+        'validation_sample_list_path': 'data/val.csv',
         # frames
         'frame_size': 224,
         'frames_per_video': 3,
@@ -152,7 +160,7 @@ if __name__ == '__main__':
     optimizer = build_optimizer(nets)
 
     # load checkpoint
-    load_checkpoint('ckpt/latest.pth', model, optimizer, args)
+    # load_checkpoint('ckpt/latest.pth', model, optimizer, args)
 
     # dataset and loader
     dataset_train = SolosMixDataset(args, 'train')
@@ -161,7 +169,7 @@ if __name__ == '__main__':
         dataset_train,
         batch_size=args['batch_size'],
         shuffle=True,
-        # num_workers=args['workers'],
+        num_workers=args['workers'],
         drop_last=True)
     loader_validation = torch.utils.data.DataLoader(
         dataset_validation,

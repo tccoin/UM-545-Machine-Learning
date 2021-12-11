@@ -7,10 +7,10 @@ from functools import partial
 
 class ResnetDilate(nn.Module):
 
-    def __init__(self, K=16):
+    def __init__(self, K=16, pretrained=True):
         super(ResnetDilate, self).__init__()
 
-        original_net = torchvision.models.resnet18(pretrained=True)
+        original_net = torchvision.models.resnet18(pretrained)
 
         # Remove the stride of the last residual block
         original_net.layer4.apply(partial(self._nostride_dilate, dilate=2))

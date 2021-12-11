@@ -1,0 +1,1 @@
+conda create -n ml tensorboard pytorch torchvision torchaudio cudatoolkit=11.3 librosa mir_eval -c conda-forge -c pytorch
