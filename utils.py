@@ -32,7 +32,7 @@ def istft_reconstruction(mag, phase, hop_length=256):
 
 def calc_metrics(batch_data, outputs, args):
     # meters
-    sdr_mix_meter = []
+    nsdr_meter = []
     sdr_meter = []
     sir_meter = []
     sar_meter = []
@@ -95,12 +95,12 @@ def calc_metrics(batch_data, outputs, args):
             sdr_mix, _, _, _ = bss_eval_sources(np.asarray(gts_wav), np.asarray(
                 [mix_wav[0:L] for n in range(N)]), compute_permutation=False)
 
-            sdr_mix_meter.append(sdr_mix.mean())
+            nsdr_meter.append(sdr.mean()-sdr_mix.mean())
             sdr_meter.append(sdr.mean())
             sir_meter.append(sir.mean())
             sar_meter.append(sar.mean())
 
-    return [np.mean(sdr_mix_meter), np.mean(sdr_meter), np.mean(sir_meter), np.mean(sar_meter)]
+    return [np.mean(nsdr_meter), np.mean(sdr_meter), np.mean(sir_meter), np.mean(sar_meter)]
 
 
 def save_checkpoint(model, optimizer, args):

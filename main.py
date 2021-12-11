@@ -31,7 +31,7 @@ def build_optimizer(nets):
                     {'params': net_synthesizer.parameters(), 'lr': lr},
                     {'params': net_frame.features.parameters(), 'lr': lr},
                     {'params': net_frame.fc.parameters(), 'lr': lr}]
-    return torch.optim.SGD(param_groups, momentum=0.9, weight_decay=1e-4)
+    return torch.optim.SGD(param_groups, momentum=0.9, weight_decay=1e-3)
 
 
 def weights_init(layer):
@@ -58,21 +58,31 @@ def evaluate(model, loader, args):
     # record loss
     metrics_list = np.array(metrics_list)
     metrics = np.mean(metrics_list, axis=0)
-    args['writer'].add_scalar(
-        'Metrics/sdr_mix', metrics[0], args['current_epoch']+1)
-    args['writer'].add_scalar(
-        'Metrics/sdr', metrics[1], args['current_epoch']+1)
-    args['writer'].add_scalar(
-        'Metrics/sir', metrics[2], args['current_epoch']+1)
-    args['writer'].add_scalar(
-        'Metrics/sar', metrics[3], args['current_epoch']+1)
-    args['history']['metrics'].append(
-        (args['current_epoch'], metrics))
+    epoch_num = args['current_epoch']+1
+    args['writer'].add_scalar('Metrics/sdr_mix', metrics[0], epoch_num)
+    args['writer'].add_scalar('Metrics/sdr', metrics[1], epoch_num)
+    args['writer'].add_scalar('Metrics/sir', metrics[2], epoch_num)
+    args['writer'].add_scalar('Metrics/sar', metrics[3], epoch_num)
+    args['history']['metrics'].append((args['current_epoch'], metrics))
     loss = torch.mean(torch.stack(error_history))
     args['history']['validation_loss'].append((args['current_epoch'], loss))
-    args['writer'].add_scalar('Loss/validation', loss, args['current_epoch']+1)
-    print('[Eval] Epoch {}, Loss: {:.4f}'.format(
-        args['current_epoch']+1, loss))
+    args['writer'].add_scalar('Loss/validation', loss, epoch_num)
+    print('[Eval] Epoch {}, Loss: {:.4f}'.format(epoch_num, loss))
+    # weight histogram
+    weights_list = [
+        ('net_frame.fc.bias', model.net_frame.fc.bias),
+        ('net_frame.fc.weight', model.net_frame.fc.weight),
+        ('net_frame.layer0.weight', model.net_frame.features[0].weight),
+        ('net_sound.layer0.weight', model.net_sound.unet.model[0].weight),
+        ('net_sound.layer2.weight',
+         model.net_sound.unet.model[1].model[1].weight),
+
+        ('net_sound.layer4.weight', model.net_sound.unet.model[4].weight),
+        ('net_thethesizer.scale', model.net_synthesizer.scale),
+        ('net_thethesizer.bias', model.net_synthesizer.bias),
+    ]
+    for weights in weights_list:
+        args['writer'].add_histogram(weights[0], weights[1], epoch_num)
 
 
 def train(model, loader, optimizer, args):
@@ -106,7 +116,7 @@ if __name__ == '__main__':
         'batch_size': 24,
         'workers': 4,
         'print_interval_batch': 1,
-        'evaluate_interval_epoch': 1,
+        'evaluate_interval_epoch': 5,
         'num_epoch': 100,
         'ckeckpoint_path': 'ckpt/',
         # dataset
@@ -132,7 +142,8 @@ if __name__ == '__main__':
     args['device'] = torch.device('cuda')
     args['writer'] = SummaryWriter()
     args['current_epoch'] = 0
-    args['seed'] = random.randint(0, 10000)
+    # args['seed'] = random.randint(0, 10000)
+    args['seed'] = 6480
     args['history'] = {'train_loss': [], 'validation_loss': [], 'metrics': []}
 
     # nets
@@ -141,7 +152,7 @@ if __name__ == '__main__':
     optimizer = build_optimizer(nets)
 
     # load checkpoint
-    # load_checkpoint('ckpt/latest.pth', model, optimizer, args)
+    load_checkpoint('ckpt/latest.pth', model, optimizer, args)
 
     # dataset and loader
     dataset_train = SolosMixDataset(args, 'train')
