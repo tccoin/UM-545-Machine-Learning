@@ -12,6 +12,7 @@ from models.synthesizer_net import SynthesizerNet
 from net_wrapper import NetWrapper
 from models.metrics import AverageMeter
 from dataset.SolosMixDataset import SolosMixDataset
+from dataset.UrmpDataset import UrmpDataset
 from utils import save_checkpoint, load_checkpoint, calc_metrics
 import random
 
@@ -111,7 +112,7 @@ def train(model, loader, optimizer, args):
 if __name__ == '__main__':
     args = {
         # general
-        'mode': 'train',
+        'mode': 'test',
         'seed': None,
         'batch_size': 24,
         'workers': 24,
@@ -132,6 +133,8 @@ if __name__ == '__main__':
         'validation_samples_num': 40,
         'train_sample_list_path': 'data/train.csv',
         'validation_sample_list_path': 'data/val.csv',
+        'test_sample_list_path': 'data/test.csv',
+        'test_samples_num': 44,
         # frames
         'frame_size': 224,
         'frames_per_video': 3,
@@ -162,28 +165,39 @@ if __name__ == '__main__':
     # load checkpoint
     # load_checkpoint('ckpt/latest.pth', model, optimizer, args)
 
-    # dataset and loader
-    dataset_train = SolosMixDataset(args, 'train')
-    dataset_validation = SolosMixDataset(args, 'validation')
-    loader_train = torch.utils.data.DataLoader(
-        dataset_train,
-        batch_size=args['batch_size'],
-        shuffle=True,
-        num_workers=args['workers'],
-        drop_last=True)
-    loader_validation = torch.utils.data.DataLoader(
-        dataset_validation,
-        batch_size=args['batch_size'],
-        shuffle=False,
-        # num_workers=args['workers'],
-        drop_last=False)
+    if args['mode'] == 'test':
 
-    if args['mode'] == 'evaluate':
-        # evaluate mode
-        loss = evaluate(model, loader_validation, args)
-        print('[Eval] Epoch 0, Loss: {:.4f}'.format(loss))
+        # dataset and loader
+        dataset_test = UrmpDataset(args, 'test')
+        loader_test = torch.utils.data.DataLoader(
+            dataset_test,
+            batch_size=args['batch_size'],
+            shuffle=True,
+            # num_workers=args['workers'],
+            drop_last=True)
+
+        # test mode
+        evaluate(model, loader_test, args)
+
     elif args['mode'] == 'train':
-        # train mode
+
+        # dataset and loader
+        dataset_train = SolosMixDataset(args, 'train')
+        dataset_validation = SolosMixDataset(args, 'validation')
+        loader_train = torch.utils.data.DataLoader(
+            dataset_train,
+            batch_size=args['batch_size'],
+            shuffle=True,
+            # num_workers=args['workers'],
+            drop_last=True)
+        loader_validation = torch.utils.data.DataLoader(
+            dataset_validation,
+            batch_size=args['batch_size'],
+            shuffle=False,
+            # num_workers=args['workers'],
+            drop_last=False)
+
+        # train
         epoch_iters = len(dataset_train)
         print('1 Epoch = {} iters'.format(epoch_iters))
         for epoch in range(args['current_epoch'], args['num_epoch']):
