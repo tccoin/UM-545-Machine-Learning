@@ -26,7 +26,6 @@ class NetWrapper(nn.Module):
         frames = [frames[i].to(args['device']) for i in range(N)]
         mags = [mags[i].to(args['device']) for i in range(N)]
 
-        # todo: what's this?
         # 0.0 warp the spectrogram
         if args['log_freq']:
             grid_warp = torch.from_numpy(
